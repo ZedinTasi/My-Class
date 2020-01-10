@@ -30,6 +30,16 @@ void mtx_print(mtx *m)
 	}
 }
 
+void mtx_print_transpose(mtx *m)
+{
+	mtx mt;
+	mtx_new(&mt, m->col, m->row);
+	mtx_transpose(&mt, m);
+	mtx_print(&mt);
+	mtx_delete(&mt);
+
+}
+
 void mtx_set_zero(mtx *m)
 {
 	memset(m->v, 0, m->row*m->col * sizeof(double));
@@ -48,6 +58,15 @@ void mtx_transpose(mtx * m)
 	m->col = tmp;
 	free(m->v);
 	m->v = v1;
+}
+
+void mtx_transpose(mtx * mt, mtx * m)
+{
+	for (int i = 0; i < m->col; i++) {
+		for (int j = 0; j < m->row; j++) {
+			mtx_set_value(mt,i,j, mtx_get_value(m, j, i));
+		}
+	}
 }
 
 void mtx_swap_row(mtx *m, int row1, int row2)
@@ -82,9 +101,31 @@ void mtx_set_identity(mtx *m)
 	for (int i = 0; i < n; i++) mtx_set_value(m, i, i, 1.0);
 }
 
-void mtx_equal(mtx *m1, mtx *m2)
+void mtx_copy(mtx *m1, mtx *m2)
 {
 	memcpy(m1->v, m2->v, m1->col*m1->row * sizeof(double));
+}
+
+void mtx_copy(mtx * m, double *arr)
+{
+
+	for (int i = 0; i < m->row; i++) {
+		for (int j = 0; j < m->col; j++) {
+			mtx_set_value(m, i, j, arr[i*m->col + j]);
+		}
+	}
+
+}
+
+void mtx_diag(mtx * m, mtx * diag)
+{
+	if (m->col != m->row)return;
+	if (diag->col != 1)return;
+
+	for (int i = 0; i < m->row; i++) {
+		mtx_set_value(diag, i, 0, mtx_get_value(m, i, i));
+	}
+
 }
 
 #define F_ABS(x) ((x > 0) ? (x) : -(x))
@@ -122,12 +163,30 @@ void mtx_multiply(mtx *m, mtx *m1, mtx *m2)
 	mtx_delete(&mm);
 }
 
+void mtx_scalar(mtx * m, mtx * m1, double s)
+{
+	for (int i = 0; i < m->row; i++) {
+		for (int j = 0; j < m->col; j++) {
+			mtx_set_value(m, i, j, s*mtx_get_value(m1, i, j));
+		}
+	}
+}
+
 void mtx_add(mtx * m, mtx * m1, mtx * m2)
 {
 	if (m->row != m1->row || m->row != m2->row || m->col != m1->col || m->col != m2->col) return;
 	for (int i = 0; i < m->row; i++) {
 		for (int j = 0; j < m->col; j++) {
 			mtx_set_value(m, i, j, mtx_get_value(m1, i, j) + mtx_get_value(m2, i, j));
+		}
+	}
+}
+
+void mtx_add(mtx * m, mtx * m1, double a)
+{
+	for (int i = 0; i < m1->row; i++) {
+		for (int j = 0; j < m1->col; j++) {
+			mtx_set_value(m, i, j, mtx_get_value(m1, i, j) + a);
 		}
 	}
 }
@@ -151,7 +210,7 @@ void mtx_solve_inverse(mtx *m, mtx *im)
 	mtx_new(&B, m->row, m->col);
 	//mtx_new(&C, m->row, m->col);
 	C = *im;
-	mtx_equal(&B, &A);
+	mtx_copy(&B, &A);
 	mtx_set_identity(&C);
 
 	order = (int*)malloc(size * sizeof(double));
@@ -225,15 +284,63 @@ void mtx_solve_inverse(mtx *m, mtx *im)
 	//return C;
 }
 
+
+
+double mtx_inner_product(mtx * v1, mtx * v2)
+{
+	double ans = 0.0;
+	for (int i = 0; i < v1->row; i++) {
+		ans += mtx_get_value(v1, i, 0)*mtx_get_value(v2, i, 0);
+	}
+
+	return ans;
+}
+
+double mtx_3x3_det(mtx * m)
+{
+	if (m->col != 3 || m->row != 3) return 0.0;
+
+	double ans = 0.0;
+
+	ans = mtx_get_value(m, 0, 0)*mtx_get_value(m, 1, 1)*mtx_get_value(m, 2, 2)
+		+ mtx_get_value(m, 0, 1)*mtx_get_value(m, 1, 2)*mtx_get_value(m, 3, 0)
+		+ mtx_get_value(m, 0, 2)*mtx_get_value(m, 1, 0)*mtx_get_value(m, 2, 1)
+		- mtx_get_value(m, 0, 0)*mtx_get_value(m, 1, 2)*mtx_get_value(m, 2, 1)
+		- mtx_get_value(m, 0, 1)*mtx_get_value(m, 1, 0)*mtx_get_value(m, 2, 2)
+		- mtx_get_value(m, 0, 2)*mtx_get_value(m, 1, 1)*mtx_get_value(m, 2, 0);
+
+	return ans;
+}
+
 double mtx_elements_sum(mtx * m)
 {
-	double sum = 0;
+	double sum = 0.0;
 	for (int i = 0; i < m->col; i++) {
 		for (int j = 0; j < m->row; j++) {
 			sum += mtx_get_value(m, i, j);
 		}
 	}
 	return sum;
+}
+
+double mtx_elements_max(mtx * m)
+{
+	double M = 0.0;
+	for (int i = 0; i < m->col; i++) {
+		for (int j = 0; j < m->row; j++) {
+			if (mtx_get_value(m, i, j) > M) M = mtx_get_value(m, i, j);
+		}
+	}
+	return M;
+}
+
+void mtx_abs(mtx * m, mtx * mabs)
+{
+	for (int i = 0; i < m->row; i++) {
+		for (int j = 0; j < m->col; j++) {
+			mtx_set_value(mabs, i, j, F_ABS(mtx_get_value(m, i, j)));
+		}
+	}
 }
 
 void mtx_normalize(mtx * m)
@@ -244,7 +351,16 @@ void mtx_normalize(mtx * m)
 			mtx_set_value(m, i, j, mtx_get_value(m, i, j) / sum);
 		}
 	}
+}
 
+double mtx_norm_inf(mtx * m)
+{
+	mtx mabs;
+	mtx_new(&mabs, m->row, m->col);
+	mtx_abs(m, &mabs);
+	double ans = mtx_elements_max(&mabs);
+	mtx_delete(&mabs);
+	return ans;
 }
 
 double mtx_Fnorm(mtx * m)
@@ -306,4 +422,58 @@ void mtx_rotation3(mtx * m, mtx * shift)
 	mtx_delete(&Ra);
 	mtx_delete(&Rb);
 	mtx_delete(&Rc);
+}
+
+void mtx_rotation3_deg(mtx * m, mtx * shift)
+{
+	if (m->row != 3 || m->col != 3)return;
+	if (shift->col != 1)return;
+
+	int n = shift->row;
+	mtx Ra, Rb, Rc;
+	mtx_new(&Ra, 3, 3);
+	mtx_new(&Rb, 3, 3);
+	mtx_new(&Rc, 3, 3);
+	mtx_rotation(&Ra, DEG2RAD(mtx_get_value(shift, n - 3, 0)), 0);
+	mtx_rotation(&Rb, DEG2RAD(mtx_get_value(shift, n - 2, 0)), 1);
+	mtx_rotation(&Rc, DEG2RAD(mtx_get_value(shift, n - 1, 0)), 2);
+	mtx_multiply(m, &Ra, &Rb);
+	mtx_multiply(m, m, &Rc);
+	mtx_delete(&Ra);
+	mtx_delete(&Rb);
+	mtx_delete(&Rc);
+}
+
+vec3 vec3_rotate(vec3 v, double rx, double ry, double rz)
+{
+	double a = DEG2RAD(rz);
+	double b = DEG2RAD(ry);
+	double c = DEG2RAD(rx);
+
+	mtx v0, angle, R;
+	mtx_new(&v0, 3, 1);
+	mtx_new(&angle, 3, 1);
+	mtx_new(&R, 3, 3);
+
+	mtx_set_value(&angle, 0, 0, a);
+	mtx_set_value(&angle, 1, 0, b);
+	mtx_set_value(&angle, 2, 0, c);
+	mtx_set_value(&v0, 0, 0, v.x);
+	mtx_set_value(&v0, 1, 0, v.y);
+	mtx_set_value(&v0, 2, 0, v.z);
+
+	mtx_rotation3(&R, &angle);
+
+	mtx_multiply(&v0, &R, &v0);
+
+	float vx = mtx_get_value(&v0, 0, 0);
+	float vy = mtx_get_value(&v0, 1, 0);
+	float vz = mtx_get_value(&v0, 2, 0);
+
+	mtx_delete(&v0);
+	mtx_delete(&angle);
+	mtx_delete(&R);
+
+	vec3 vans(vx, vy, vz);
+	return vans;
 }
